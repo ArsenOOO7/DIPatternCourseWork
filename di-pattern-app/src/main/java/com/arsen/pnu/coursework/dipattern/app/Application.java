@@ -10,5 +10,6 @@ public class Application {
         DIPatternLib.start(Application.class, args);
         ApplicationContext context = ApplicationContext.getInstance();
         TestComponent component = context.getBean(TestComponent.class);
+        System.out.println(component.getValue());
     }
 }

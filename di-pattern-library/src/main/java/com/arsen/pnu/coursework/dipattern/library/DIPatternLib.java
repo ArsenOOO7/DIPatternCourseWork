@@ -6,8 +6,6 @@ import lombok.Getter;
 @Getter
 public class DIPatternLib {
 
-    private static DIPatternLib INSTANCE;
-
     private final ApplicationContext context;
 
     private DIPatternLib(Class<?> appClass) {
