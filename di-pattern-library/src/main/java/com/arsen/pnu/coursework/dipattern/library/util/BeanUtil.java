@@ -6,10 +6,7 @@ import lombok.experimental.UtilityClass;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Constructor;
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @UtilityClass
 public class BeanUtil {
@@ -19,7 +16,7 @@ public class BeanUtil {
         if(constructors.length > 1){
             throw new MultipleConstructorException(type);
         }
-        return constructors[0];
+        return makeAccessible(constructors[0]);
     }
 
     public static List<Class<?>> getParameterTypes(Constructor<?> constructor) {
