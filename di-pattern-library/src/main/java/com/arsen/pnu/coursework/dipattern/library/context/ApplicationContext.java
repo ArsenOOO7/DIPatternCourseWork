@@ -35,6 +35,20 @@ public class ApplicationContext {
         scan();
     }
 
+    public <T> T getBean(Class<T> type) {
+        return (T) Optional.ofNullable(beansMap.get(type.getSimpleName()))
+                .orElseGet(() -> beansMap.values()
+                        .stream()
+                        .filter(instance -> type.equals(instance.getClass()))
+                        .findFirst()
+                        .orElseThrow(() -> new BeanNotFoundException(type)));
+    }
+
+    public <T> T getBean(String beanName) {
+        return (T) Optional.ofNullable(beanName)
+                .orElseThrow(() -> new BeanNotFoundException(beanName));
+    }
+
     private void scan() {
         String packageName = applicationClass.getPackageName();
         Reflections reflections = new Reflections(packageName);
@@ -139,19 +153,5 @@ public class ApplicationContext {
                 .filter(instance -> instance.getClass().equals(type))
                 .findFirst()
                 .orElse(null);
-    }
-
-    public <T> T getBean(Class<T> type) {
-        return (T) Optional.ofNullable(beansMap.get(type.getSimpleName()))
-                .orElseGet(() -> beansMap.values()
-                        .stream()
-                        .filter(instance -> type.equals(instance.getClass()))
-                        .findFirst()
-                        .orElseThrow(() -> new BeanNotFoundException(type)));
-    }
-
-    public <T> T getBean(String beanName) {
-        return (T) Optional.ofNullable(beanName)
-                .orElseThrow(() -> new BeanNotFoundException(beanName));
     }
 }
