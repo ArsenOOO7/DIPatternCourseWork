@@ -1,7 +1,7 @@
 package com.arsen.pnu.coursework.dipattern.library.context;
 
 import com.arsen.pnu.coursework.dipattern.library.annotation.Component;
-import com.arsen.pnu.coursework.dipattern.library.context.bean.DequeuBean;
+import com.arsen.pnu.coursework.dipattern.library.context.bean.InternalBean;
 import com.arsen.pnu.coursework.dipattern.library.exception.BeanNotFoundException;
 import com.arsen.pnu.coursework.dipattern.library.exception.DuplicateBeanException;
 import com.arsen.pnu.coursework.dipattern.library.util.BeanUtil;
@@ -11,6 +11,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.reflections.Reflections;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
@@ -23,46 +24,51 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 @Slf4j
 public class ApplicationContext {
 
-    private static ApplicationContext INSTANCE;
-
     private final Class<?> applicationClass;
 
     private final Map<String, Object> beansMap = new ConcurrentHashMap<>();
-    private final Deque<DequeuBean> beanInitOrder = new ConcurrentLinkedDeque<>();
+    private final Deque<InternalBean> beanInitOrder = new ConcurrentLinkedDeque<>();
+    private final Deque<InternalBean> autowiredBeansInitOrder = new ConcurrentLinkedDeque<>();
 
     public ApplicationContext(Class<?> applicationClass) {
         this.applicationClass = applicationClass;
-        INSTANCE = this; //want to cry about it
         scan();
     }
 
     private void scan() {
         String packageName = applicationClass.getPackageName();
         Reflections reflections = new Reflections(packageName);
-
         reflections.getTypesAnnotatedWith(Component.class)
                 .forEach(this::addBeanToDeque);
+        registerBeans();
+    }
 
-        DequeuBean bean;
+    private void registerBeans() {
+        registerBean(getClass().getSimpleName(), this);
+        InternalBean bean;
         while ((bean = beanInitOrder.poll()) != null) {
-            registerComponent(bean);
+            registerBean(bean);
+        }
+        while((bean = autowiredBeansInitOrder.poll()) != null) {
+            populateAutowiredFields(bean);
         }
     }
 
     @SneakyThrows
-    private void registerComponent(DequeuBean bean) {
+    private void registerBean(InternalBean bean) {
         if (beansMap.containsKey(bean.getName())) {
             throw new DuplicateBeanException(bean.getType(), bean.getName());
         }
-        Optional.ofNullable(initBean(bean))
-                .ifPresentOrElse(createdBean -> {
-                    beansMap.put(bean.getName(), createdBean);
-                    log.trace("Registered component {}", bean.getName());
-                }, () -> beanInitOrder.push(bean));
+        registerBean(bean.getName(), initBean(bean));
+    }
+
+    private void registerBean(String beanName, Object bean) {
+        beansMap.put(beanName, bean);
+        log.trace("Registered component {}", bean);
     }
 
     @SneakyThrows
-    private Object initBean(DequeuBean bean) {
+    private Object initBean(InternalBean bean) {
         Constructor<?> constructor = bean.getConstructor();
         if (constructor.getParameterCount() == 0) {
             return constructor.newInstance();
@@ -85,13 +91,44 @@ public class ApplicationContext {
         Component annotation = type.getAnnotation(Component.class);
         String beanName = StringUtils.firstNonBlank(annotation.value(), type.getSimpleName());
         Constructor<?> constructor = BeanUtil.getConstructor(type);
-        DequeuBean bean = DequeuBean.builder().name(beanName).type(type).constructor(constructor).build();
+        InternalBean bean = InternalBean.builder()
+                .name(beanName)
+                .type(type)
+                .constructor(constructor)
+                .autowiredTypesMap(BeanUtil.getAutowiredFieldTypesMap(type))
+                .build();
 
         if (constructor.getParameterCount() == 0) {
             beanInitOrder.addFirst(bean);
+            if(!bean.getAutowiredTypesMap().isEmpty()){
+                autowiredBeansInitOrder.addLast(bean);
+            }
             return;
         }
         beanInitOrder.addLast(bean);
+    }
+
+    private void populateAutowiredFields(InternalBean bean) {
+        if (bean.getAutowiredTypesMap().isEmpty()) {
+            return;
+        }
+        Object instance = beansMap.get(bean.getName());
+        Map<Field, Class<?>> fieldMap = bean.getAutowiredTypesMap();
+        fieldMap.entrySet().removeIf(entry -> {
+            Object dependency = getInternalBean(entry.getValue());
+            if (Objects.isNull(dependency)) {
+                return false;
+            }
+            try {
+                entry.getKey().set(instance, dependency);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+            return true;
+        });
+        if(!fieldMap.isEmpty()) {
+            autowiredBeansInitOrder.addLast(bean);
+        }
     }
 
     private Object getInternalBean(Class<?> type) {
@@ -113,7 +150,8 @@ public class ApplicationContext {
                         .orElseThrow(() -> new BeanNotFoundException(type)));
     }
 
-    public static ApplicationContext getInstance() {
-        return INSTANCE;
+    public <T> T getBean(String beanName) {
+        return (T) Optional.ofNullable(beanName)
+                .orElseThrow(() -> new BeanNotFoundException(beanName));
     }
 }

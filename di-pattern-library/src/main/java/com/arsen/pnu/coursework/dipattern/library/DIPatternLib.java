@@ -12,7 +12,7 @@ public class DIPatternLib {
         this.context = new ApplicationContext(appClass);
     }
 
-    public static void start(Class<?> appClass, String[] args) {
-        new DIPatternLib(appClass);
+    public static ApplicationContext start(Class<?> appClass, String[] args) {
+        return new DIPatternLib(appClass).getContext();
     }
 }
