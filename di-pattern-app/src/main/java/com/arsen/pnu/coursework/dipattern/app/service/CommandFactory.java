@@ -20,13 +20,13 @@ public class CommandFactory {
                 .filter(StringUtils::isNotBlank)
                 .map(command -> command.split(" "))
                 .map(arguments -> getCommand(arguments[0])
-                        .execute(Arrays.copyOfRange(arguments, 1, arguments.length)))
+                        .map(command -> command.execute(Arrays.copyOfRange(arguments, 1, arguments.length)))
+                        .orElse("Unknown command"))
                 .orElse("Empty command");
     }
 
-    private Command getCommand(String prefix) {
+    private Optional<Command> getCommand(String prefix) {
         return commands.stream().filter(command -> command.getPrefix().equals(prefix))
-                .findFirst()
-                .orElse(null);
+                .findFirst();
     }
 }
