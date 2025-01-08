@@ -7,6 +7,8 @@ import lombok.experimental.UtilityClass;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Parameter;
+import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -23,8 +25,8 @@ public class BeanUtil {
         return makeAccessible(constructors[0]);
     }
 
-    public static List<Class<?>> getParameterTypes(Constructor<?> constructor) {
-        return Arrays.asList(constructor.getParameterTypes());
+    public static List<Parameter> getParameterTypes(Constructor<?> constructor) {
+        return Arrays.asList(constructor.getParameters());
     }
 
     public static Map<Field, Class<?>> getAutowiredFieldTypesMap(Class<?> type) {

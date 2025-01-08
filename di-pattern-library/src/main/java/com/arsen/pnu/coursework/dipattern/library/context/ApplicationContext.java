@@ -12,6 +12,10 @@ import org.reflections.Reflections;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
@@ -63,7 +67,7 @@ public class ApplicationContext {
         while ((bean = beanInitOrder.poll()) != null) {
             registerBean(bean);
         }
-        while((bean = autowiredBeansInitOrder.poll()) != null) {
+        while ((bean = autowiredBeansInitOrder.poll()) != null) {
             populateAutowiredFields(bean);
         }
     }
@@ -88,9 +92,9 @@ public class ApplicationContext {
             return constructor.newInstance();
         }
 
-        List<Class<?>> parameterTypes = BeanUtil.getParameterTypes(constructor);
+        List<Parameter> parameterTypes = BeanUtil.getParameterTypes(constructor);
         List<Object> args = new LinkedList<>();
-        for (Class<?> parameterType : parameterTypes) {
+        for (Parameter parameterType : parameterTypes) {
             Object instance = getInternalBean(parameterType);
             if (Objects.isNull(instance)) {
                 return null;
@@ -114,7 +118,7 @@ public class ApplicationContext {
 
         if (constructor.getParameterCount() == 0) {
             beanInitOrder.addFirst(bean);
-            if(!bean.getAutowiredTypesMap().isEmpty()){
+            if (!bean.getAutowiredTypesMap().isEmpty()) {
                 autowiredBeansInitOrder.addLast(bean);
             }
             return;
@@ -140,14 +144,31 @@ public class ApplicationContext {
             }
             return true;
         });
-        if(!fieldMap.isEmpty()) {
+        if (!fieldMap.isEmpty()) {
             autowiredBeansInitOrder.addLast(bean);
         }
+    }
+
+    private Object getInternalBean(Parameter parameter) {
+        Class<?> type = parameter.getType();
+        if(List.class.isAssignableFrom(type)) {
+            Type parameterizedType = ((ParameterizedType) parameter.getParameterizedType()).getActualTypeArguments()[0];
+            return beansMap.values().stream()
+                    .filter(instance -> ((Class<?>) parameterizedType).isAssignableFrom(instance.getClass()))
+                    .toList();
+        }
+        return getInternalBean(type);
     }
 
     private Object getInternalBean(Class<?> type) {
         if (beansMap.containsKey(type.getSimpleName())) {
             return beansMap.get(type.getSimpleName());
+        }
+        if (type.isInterface()) {
+            return beansMap.values().stream()
+                    .filter(instance -> instance.getClass().isAssignableFrom(type))
+                    .findFirst()
+                    .orElse(null);
         }
         return beansMap.values().stream()
                 .filter(instance -> instance.getClass().equals(type))
